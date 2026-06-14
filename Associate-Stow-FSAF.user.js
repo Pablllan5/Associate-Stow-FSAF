@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         Associate-Stow-FSAF
+// @name         Associate Stow-FSAF
 // @namespace    http://tampermonkey.net/
 // @version      4.3.0
 // @description  Stow FSAF analysis via API - clean edition
@@ -14,8 +14,8 @@
 // @grant        GM_xmlhttpRequest
 // @connect      hooks.slack.com
 // @connect      *.slack.com
-// @updateURL    https://github.com/Pablllan5/Associate-Stow-FSAF/raw/refs/heads/main/Associate%20Stow%20FSAF.user.js
-// @downloadURL  https://github.com/Pablllan5/Associate-Stow-FSAF/raw/refs/heads/main/Associate%20Stow%20FSAF.user.js
+// @updateURL    https://github.com/Pablllan5/Associate-Stow-FSAF/raw/refs/heads/main/Associate-Stow-FSAF.user.js
+// @downloadURL  https://github.com/Pablllan5/Associate-Stow-FSAF/raw/refs/heads/main/Associate-Stow-FSAF.user.js
 // ==/UserScript==
 
 (function () {
