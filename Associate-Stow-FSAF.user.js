@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Associate Stow-FSAF
 // @namespace    http://tampermonkey.net/
-// @version      4.5.0
+// @version      4.6.0
 // @description  Stow FSAF analysis via API - clean edition
 // @author       Pablllan (Pablo Chicano Llano)
 // @match        https://logistics.amazon.co.uk/station/dashboard/*
