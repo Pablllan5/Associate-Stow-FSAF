@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Associate Stow-FSAF
 // @namespace    http://tampermonkey.net/
-// @version      4.4.0
+// @version      4.5.0
 // @description  Stow FSAF analysis via API - clean edition
 // @author       Pablllan (Pablo Chicano Llano)
 // @match        https://logistics.amazon.co.uk/station/dashboard/*
@@ -185,7 +185,8 @@ function buildReport(){
 
 function buildMeeting(){
   const s=getStore(),R=s.results||{},C=s.workerComments||{},sc=getStation()||'DQB2';
-  const rows=(s.associates||[]).filter(a=>R[a.associate]&&!R[a.associate].error).map(a=>({login:a.associate,fb:C[a.associate]||'',...(R[a.associate]||{})}));
+  const base=s.showOnlyActive?(s.associates||[]).filter(a=>a.active):(s.associates||[]);
+  const rows=base.filter(a=>R[a.associate]&&!R[a.associate].error).map(a=>({login:a.associate,fb:C[a.associate]||'',...(R[a.associate]||{})}));
   const t={s:rows.reduce((a,r)=>a+(r.stowed||0),0),e:rows.reduce((a,r)=>a+(r.errors||0),0),sz:rows.reduce((a,r)=>a+(r.sourceZoneErrors||0),0),bx:rows.reduce((a,r)=>a+(r.boxErrors||0),0),trk:rows.reduce((a,r)=>a+(r.trackingErrors||0),0)};
   const avg=calcAvgPPH(R);
   const top3=[...rows].sort((a,b)=>(b.errors||0)-(a.errors||0)).slice(0,3);
