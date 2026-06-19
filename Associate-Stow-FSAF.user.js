@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Associate Stow-FSAF
 // @namespace    http://tampermonkey.net/
-// @version      4.6.0
+// @version      5.1.0
 // @description  Stow FSAF analysis via API - clean edition
 // @author       Pablllan (Pablo Chicano Llano)
 // @match        https://logistics.amazon.co.uk/station/dashboard/*
@@ -254,14 +254,16 @@ function showInfo(login){
   ${r?.details?.length?`<div style="font-size:11px;color:#64748b;font-weight:800;margin:10px 0 6px">FSAF DETAILS (${r.details.length})</div><div style="max-height:130px;overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr><th style="color:#64748b;font-size:8px;padding:4px;border-bottom:1px solid rgba(255,255,255,.1);text-align:left">#</th><th style="color:#64748b;font-size:8px;padding:4px;border-bottom:1px solid rgba(255,255,255,.1);text-align:left">Tracking</th><th style="color:#64748b;font-size:8px;padding:4px;border-bottom:1px solid rgba(255,255,255,.1);text-align:left">Ref</th><th style="color:#64748b;font-size:8px;padding:4px;border-bottom:1px solid rgba(255,255,255,.1);text-align:left">Type</th></tr></thead><tbody>${r.details.slice(0,25).map((d,i)=>`<tr><td style="padding:3px;color:#e2e8f0">${i+1}</td><td style="padding:3px;color:#e2e8f0">${d.tracking}</td><td style="padding:3px;color:#e2e8f0">${d.ref}</td><td style="padding:3px;color:${d.type==='sourceZone'?'#60a5fa':d.type==='tracking'?'#facc15':'#f97316'}">${d.type}</td></tr>`).join('')}</tbody></table></div>`:''}
   ${r?.duplicateDetails?.length?`<div style="font-size:11px;color:#64748b;font-weight:800;margin:10px 0 6px">STOWED X2 DETAILS</div><div style="max-height:100px;overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr><th style="color:#64748b;font-size:8px;padding:4px;text-align:left">Tracking</th><th style="color:#64748b;font-size:8px;padding:4px;text-align:left">Times</th></tr></thead><tbody>${r.duplicateDetails.map(d=>`<tr><td style="padding:3px;color:#e2e8f0">${d.tracking}</td><td style="padding:3px;color:#facc15">${d.count}x</td></tr>`).join('')}</tbody></table></div>`:''}
   ${paired.length?`<div style="font-size:11px;color:#64748b;font-weight:800;margin:10px 0 6px">STOWED BY AISLE</div><div style="display:flex;flex-wrap:wrap;gap:6px">${paired.map(p=>`<span style="background:#1e293b;border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:4px 8px;font-size:11px;font-weight:800"><span style="color:#60a5fa">${p.label}</span> <span style="color:#e2e8f0">${p.count}</span></span>`).join('')}</div>`:''}`;
-  bk.onclick=()=>{bk.remove();m.remove();};document.body.appendChild(bk);document.body.appendChild(m);
+  bk.onclick=()=>{bk.remove();m.remove();};
+  const container=document.fullscreenElement||document.webkitFullscreenElement||document.body;
+  container.appendChild(bk);container.appendChild(m);
   document.getElementById('pab-info-x').onclick=()=>{bk.remove();m.remove();};
 }
 
 // ─── CSS & PANEL ─────────────────────────────────────────────
 function injectCSS(){
   if(document.getElementById('pab-css'))return;const c=document.createElement('style');c.id='pab-css';
-  c.textContent=`#${BTN_ID}{position:fixed;right:20px;bottom:20px;z-index:2147483647;background:linear-gradient(135deg,#ff9900,#f59e0b);color:#111;border:0;border-radius:14px;padding:13px 20px;font-family:Arial,sans-serif;font-weight:900;cursor:pointer;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+  c.textContent=`#${BTN_ID}{position:fixed;right:14px;bottom:14px;z-index:2147483647;background:linear-gradient(135deg,#ff9900,#f59e0b);color:#111;border:0;border-radius:10px;padding:8px 14px;font-family:Arial,sans-serif;font-size:12px;font-weight:900;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.35)}
 #${PANEL_ID}{position:fixed;right:20px;bottom:80px;width:1180px;max-height:78vh;overflow:auto;z-index:2147483647;background:#111827;color:white;border:2px solid #ff9900;border-radius:16px;padding:16px;font-family:'Segoe UI',Arial,sans-serif;box-shadow:0 20px 60px rgba(0,0,0,.7);transition:all .3s}
 #${PANEL_ID}:fullscreen{position:fixed!important;inset:0!important;width:100vw!important;max-height:100vh!important;height:100vh!important;border-radius:0!important;border:0!important;padding:20px;background:#111827}
 #${PANEL_ID}:-webkit-full-screen{position:fixed!important;inset:0!important;width:100vw!important;max-height:100vh!important;height:100vh!important;border-radius:0!important;border:0!important;padding:20px;background:#111827}
@@ -301,7 +303,10 @@ function toggleFullscreen(){
 }
 
 function showPanel(){
-  injectCSS();document.getElementById(PANEL_ID)?.remove();
+  injectCSS();
+  let p=document.getElementById(PANEL_ID);
+  const reuse=!!p;
+  if(!p){p=document.createElement('div');p.id=PANEL_ID;}
   const s=getStore();
   const avg=calcAvgPPH(s.results||{});
 
@@ -315,7 +320,6 @@ function showPanel(){
   const tS=Object.values(s.results||{}).reduce((a,r)=>a+(r.stowed||0),0);
   const tX=Object.values(s.results||{}).reduce((a,r)=>a+(r.duplicateStowed||0),0);
 
-  const p=document.createElement('div');p.id=PANEL_ID;
   p.innerHTML=`<div class="hd"><div class="tt">📦 Stow Audit Dashboard</div><div>
   <input id="z-search" class="srch" placeholder="🔍 Buscar AA..." value="${s.searchFilter||''}">
   <button id="z-ref" class="bo">Actualizar</button>
@@ -337,12 +341,11 @@ function showPanel(){
     return`<tr><td><input type="checkbox" class="pab-ck" data-l="${a.associate}" ${ck}></td><td class="${a.active?'ok':'bad'}">${a.active?'✅':'❌'}</td><td class="an"><img src="https://internal-cdn.amazon.com/badgephotos.amazon.com/?login=${a.associate}" style="width:26px;height:26px;border-radius:6px;vertical-align:middle;margin-right:5px;border:1px solid #334155" onerror="this.style.display='none'">${a.associate}${fb?' 📝':''}</td><td>${r?r.stowed:'-'}</td><td>${pphStr}</td><td>${r?Math.round(calcDpmo(r.errors,r.stowed)):'-'}</td><td class="${r?.errors>0?'bad':'ok'}">${r?r.errors:'-'}</td><td>${r?r.sourceZoneErrors:'-'}</td><td>${r?r.boxErrors:'-'}</td><td>${r?r.trackingErrors:'-'}</td><td class="${r?.duplicateStowed>0?'warn':'ok'}">${r?r.duplicateStowed:'-'}</td><td class="${r?.error?'warn':'ok'}">${r?(r.error||'OK'):'-'}</td><td><button class="pab-1" data-l="${a.associate}">▶</button><button class="pab-i" data-l="${a.associate}">Info</button><button class="pab-p" data-l="${a.associate}" style="${r?.breaks?.length?'background:#7f1d1d;border-color:#ef4444;color:#fca5a5':''}">⏸</button><button class="pab-fb" data-l="${a.associate}">💬</button></td></tr>`;
   }).join(''):'<tr><td colspan="13">Pulsa Actualizar.</td></tr>'}</tbody></table>`;
 
-  document.body.appendChild(p);
-  if(_isFullscreen) p.classList.add('fs');
+  if(!reuse) document.body.appendChild(p);
 
   // Event bindings
   const $=id=>document.getElementById(id);
-  $('z-cls').onclick=()=>{_isFullscreen=false;p.remove();};
+  $('z-cls').onclick=()=>{if(document.fullscreenElement)document.exitFullscreen().catch(()=>{});p.remove();};
   $('z-exp').onclick=toggleFullscreen;
   $('z-sr').onclick=sendR;$('z-sm').onclick=sendM;$('z-cfg').onclick=showConfig;
   $('z-act').onclick=()=>{const st=getStore();st.showOnlyActive=true;setStore(st);showPanel();};
@@ -401,9 +404,10 @@ async function startRun(q){
   const fin=getStore();if(!fin.results)fin.results={};Object.assign(fin.results,res);fin.running=false;setStore(fin);showPanel();alert('✅ Listo.');
 }
 
-function createBtn(){injectCSS();if(document.getElementById(BTN_ID))return;const b=document.createElement('button');b.id=BTN_ID;b.textContent='📦 STOW ERRORS';b.onclick=showPanel;document.body.appendChild(b);}
+function createBtn(){injectCSS();if(document.getElementById(BTN_ID))return;const b=document.createElement('button');b.id=BTN_ID;b.textContent='📦 STOW FSAF';b.onclick=showPanel;document.body.appendChild(b);}
 
 if(location.hostname.includes('logistics.amazon')){captureDates();setInterval(createBtn,2000);}
 if(location.hostname.includes('svs.last-mile.amazon.dev')||location.hostname.includes('logistics.amazon'))setInterval(createBtn,1000);
 
 })();
+v
