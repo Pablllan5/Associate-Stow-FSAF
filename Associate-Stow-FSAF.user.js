@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Associate Stow-FSAF
 // @namespace    http://tampermonkey.net/
-// @version      5.2.0
+// @version      5.3.0
 // @description  Stow FSAF analysis via API - v52 clean edition
 // @author       Pablllan (Pablo Chicano Llano)
 // @match        https://logistics.amazon.co.uk/station/dashboard/*
@@ -86,7 +86,7 @@ function isErr(r)       { return r.packageEventState === null && r.scanContainer
 function classifyErr(r) {
   const l = clean(r.scanLocation || '');
   if (!l || l === '-') return 'box';
-  if (/^[A-Z]{1,2}\d{1,3}-\d{1,2}[A-Z]$/i.test(l)) return 'sourceZone';
+  if (/^[A-Z]{1,2}\d{1,3}-\d{0,2}[A-Z]$/i.test(l)) return 'sourceZone';
   if (/^ES\d+$/i.test(l)) return 'tracking';
   return 'box';
 }
