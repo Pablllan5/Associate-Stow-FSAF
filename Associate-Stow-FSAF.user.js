@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Associate Stow-FSAF
 // @namespace    http://tampermonkey.net/
-// @version      5.3.0
+// @version      5.4.0
 // @description  Stow FSAF analysis via API - v52 clean edition
 // @author       Pablllan (Pablo Chicano Llano)
 // @match        https://logistics.amazon.co.uk/station/dashboard/*
@@ -26,6 +26,7 @@ const BTN_ID        = 'pab-stow-fast-btn';
 const PANEL_ID      = 'pab-stow-fast-panel';
 const MAX_CONCURRENT = 5;
 const PPH_MIN_THRESHOLD = 200;
+const PPH_MAX_THRESHOLD = 700;
 
 // ─── UTILS ────────────────────────────────────────────────
 const clean  = v => String(v || '').replace(/ /g, ' ').trim();
@@ -247,7 +248,7 @@ async function fetchAAs() {
 
 // ─── REPORTS ──────────────────────────────────────────────
 function calcAvgPPH(results) {
-  const valid = Object.values(results || {}).filter(r => r.pph >= PPH_MIN_THRESHOLD);
+  const valid = Object.values(results || {}).filter(r => r.pph >= PPH_MIN_THRESHOLD && r.pph <= PPH_MAX_THRESHOLD);
   if (!valid.length) return 0;
   return valid.reduce((a, r) => a + r.pph, 0) / valid.length;
 }
