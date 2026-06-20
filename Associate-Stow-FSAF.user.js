@@ -21,7 +21,7 @@
 'use strict';
 
 // ─── CONSTANTS ────────────────────────────────────────────
-const STORE_KEY     = 'pab_stow_audit_api_v520';
+const STORE_KEY     = 'pab_stow_audit_api_v440';
 const BTN_ID        = 'pab-stow-fast-btn';
 const PANEL_ID      = 'pab-stow-fast-panel';
 const MAX_CONCURRENT = 5;
@@ -86,6 +86,7 @@ function isErr(r)       { return r.packageEventState === null && r.scanContainer
 function classifyErr(r) {
   const l = clean(r.scanLocation || '');
   if (!l || l === '-') return 'box';
+  if (/^NC\d+$/i.test(l)) return null;
   if (/^[A-Z]{1,2}\d{1,3}-\d{0,2}[A-Z]$/i.test(l)) return 'sourceZone';
   if (/^ES\d+$/i.test(l)) return 'tracking';
   return 'box';
@@ -147,6 +148,7 @@ function analyze(packages, breakLimitMs, breakShowMaxMs) {
     }
     if (isErr(p)) {
       const t = classifyErr(p);
+      if (t === null) continue;
       errors.push({ trackingId: p.trackingId, type: t, ref: p.scanLocation || '-' });
       details.push({ tracking: p.trackingId, ref: p.scanLocation || '-', type: t });
     }
