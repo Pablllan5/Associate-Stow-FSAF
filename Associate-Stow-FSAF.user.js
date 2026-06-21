@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Associate Stow-FSAF
 // @namespace    http://tampermonkey.net/
-// @version      5.4.0
+// @version      5.7.0
 // @description  Stow FSAF analysis via API - v52 clean edition
 // @author       Pablllan (Pablo Chicano Llano)
 // @match        https://logistics.amazon.co.uk/station/dashboard/*
@@ -289,47 +289,86 @@ function buildReport() {
   return `📦 STOW AUDIT\n${fmtNow()}\n\nStowed: ${t.s} | FSAF: ${t.e} | DPMO: ${Math.round(calcDpmo(t.e,t.s))} | X2: ${t.x2} | PPH Avg: ${Math.round(avg)}\nSZ: ${t.sz} | Caja: ${t.bx} | Track: ${t.trk}\n\nEXCEL:\n${hdrs}\n${xl}`;
 }
 
-function buildMeeting() {
-  const s = getStore(), R = s.results || {}, C = s.workerComments || {}, sc = getStation() || 'STA';
-  const base = s.showOnlyActive ? (s.associates||[]).filter(a=>a.active) : (s.associates||[]);
-  const rows = base.filter(a => R[a.associate] && !R[a.associate].error)
-    .map(a => ({ login: a.associate, fb: C[a.associate] || '', ...(R[a.associate]||{}) }));
+function buildMeetingBlocks() {
+  const s = getStore(), R = s.results || {}, C = s.workerComments || {}, sc = getStation() || 'DQB2';
+
+  // Totales = TODOS los associates con resultados (activos + inactivos)
+  const allRows = (s.associates||[]).filter(a => R[a.associate] && !R[a.associate].error)
+    .map(a => ({ login: a.associate, active: a.active, fb: C[a.associate] || '', ...(R[a.associate]||{}) }));
   const t = {
-    s:  rows.reduce((a,r) => a + (r.stowed||0), 0),
-    e:  rows.reduce((a,r) => a + (r.errors||0), 0),
-    sz: rows.reduce((a,r) => a + (r.sourceZoneErrors||0), 0),
-    bx: rows.reduce((a,r) => a + (r.boxErrors||0), 0),
-    trk:rows.reduce((a,r) => a + (r.trackingErrors||0), 0)
+    s:  allRows.reduce((a,r) => a + (r.stowed||0), 0),
+    e:  allRows.reduce((a,r) => a + (r.errors||0), 0),
+    sz: allRows.reduce((a,r) => a + (r.sourceZoneErrors||0), 0),
+    bx: allRows.reduce((a,r) => a + (r.boxErrors||0), 0),
+    trk:allRows.reduce((a,r) => a + (r.trackingErrors||0), 0)
   };
   const avg = calcAvgPPH(R);
-  const top3 = [...rows].sort((a,b) => (b.errors||0) - (a.errors||0)).slice(0,3);
+
+  // Top 3 = solo ACTIVOS
+  const activeRows = allRows.filter(r => r.active);
+  const top3 = [...activeRows].sort((a,b) => (b.errors||0) - (a.errors||0)).slice(0,3);
+
   const now = new Date();
   const ds = `${String(now.getDate()).padStart(2,'0')}/${String(now.getMonth()+1).padStart(2,'0')}/${now.getFullYear()}`;
   const ts = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-  let m = `📋 Reporte FSAF — ${sc} Night Shift\n🕐 ${ds}, ${ts} • CYCLE 1\n\n`;
-  m += `📦 Totales\n✅ Stowed: ${t.s}\n❌ FSAF: ${t.e}\n📊 DPMO: ${Math.round(calcDpmo(t.e,t.s))}\n⚡ PPH Medio: ${Math.round(avg)}\nSort Zone: ${t.sz} • Caja: ${t.bx} • Tracking: ${t.trk}\n`;
-  m += `\n🔥 Top 3 — Más FSAF\n`;
-  top3.forEach((r, i) => {
-    const dp = calcDpmo(r.errors, r.stowed);
+  const dpmo = Math.round(calcDpmo(t.e, t.s));
+  const fN = n => Number(n).toLocaleString('en-US');
+  const dpmoIcon = d => d < 5000 ? ':large_green_circle:' : d <= 10000 ? ':large_yellow_circle:' : ':red_circle:';
+  const fsafIcon = f => f <= 2 ? ':large_green_circle:' : f <= 4 ? ':large_yellow_circle:' : ':red_circle:';
+  const pphIcon = diff => diff.includes('+') ? ':large_green_circle:' : diff.includes('-') ? ':red_circle:' : ':large_yellow_circle:';
+  const sortPct = t.e > 0 ? Math.round((t.sz / t.e) * 100) : 0;
+  const cajaPct = t.e > 0 ? Math.round((t.bx / t.e) * 100) : 0;
+  const trkPct  = t.e > 0 ? Math.round((t.trk / t.e) * 100) : 0;
+  const medals = [':first_place_medal:', ':second_place_medal:', ':third_place_medal:'];
+
+  const blocks = [
+    { type: 'header', text: { type: 'plain_text', text: `:clipboard: Reporte FSAF — ${sc} Night Shift` } },
+    { type: 'context', elements: [{ type: 'mrkdwn', text: `:clock1: ${ds}, ${ts}  •  *CYCLE 1*  •  *${activeRows.length} AAs activos*` }] },
+    { type: 'divider' },
+    { type: 'section', text: { type: 'mrkdwn', text: '*:package:  TOTALES DEL CICLO*' } },
+    { type: 'section', fields: [
+      { type: 'mrkdwn', text: `:white_check_mark: *Stowed*\n\`${fN(t.s)}\`` },
+      { type: 'mrkdwn', text: `${dpmoIcon(dpmo)} *DPMO*\n\`${fN(dpmo)}\`` },
+      { type: 'mrkdwn', text: `${fsafIcon(t.e)} *FSAF Totales*\n\`${fN(t.e)}\`` },
+      { type: 'mrkdwn', text: `:zap: *PPH Medio*\n\`${fN(Math.round(avg))}\`` }
+    ]},
+    { type: 'section', fields: [
+      { type: 'mrkdwn', text: `:orange_book: *Sort Zone*\n\`${t.sz}\` (${sortPct}%)` },
+      { type: 'mrkdwn', text: `:inbox_tray: *Caja*\n\`${t.bx}\` (${cajaPct}%)` },
+      { type: 'mrkdwn', text: `:mag: *Tracking*\n\`${t.trk}\` (${trkPct}%)` },
+      { type: 'mrkdwn', text: `:busts_in_silhouette: *AAs analizados*\n\`${allRows.length}\`` }
+    ]},
+    { type: 'divider' },
+    { type: 'section', text: { type: 'mrkdwn', text: '*:fire:  TOP 3 BOTTOM — MAYOR IMPACTO FSAF*' } }
+  ];
+
+  const top3Lines = top3.map((r, i) => {
+    const rDpmo = Math.round(calcDpmo(r.errors, r.stowed));
     const vs = pphVsAvg(r.pph, avg);
-    const vsStr = vs.show ? ` (${vs.pct >= 0 ? '+' : ''}${vs.pct.toFixed(0)}% vs media)` : '';
-    m += `\n${i+1}. ${r.login}\n⚡ PPH: ${Math.round(r.pph||0)}${vsStr}\n📊 DPMO: ${Math.round(dp)}\n❌ FSAF: ${r.errors}\nSort Zone: ${r.sourceZoneErrors}\nCaja: ${r.boxErrors}\nTracking: ${r.trackingErrors}\n`;
-    if (r.fb) m += `💬 ${r.fb}\n`;
-  });
-  return m;
+    const diffStr = vs.show ? `${vs.pct >= 0 ? '+' : ''}${vs.pct.toFixed(0)}%` : '';
+    const pphDiff = diffStr ? ` (${diffStr})` : '';
+    const fbText = r.fb ? `\n        :memo: _"${r.fb}"_` : '';
+    return `${medals[i]} *${r.login}*  —  PPH: \`${Math.round(r.pph||0)}\`${pphDiff} • DPMO: \`${fN(rDpmo)}\` • FSAF: \`${r.errors}\` _(SZ:${r.sourceZoneErrors||0} Caja:${r.boxErrors||0} Trk:${r.trackingErrors||0})_${fbText}`;
+  }).join('\n\n');
+
+  blocks.push({ type: 'section', text: { type: 'mrkdwn', text: top3Lines } });
+
+  blocks.push({ type: 'divider' });
+  blocks.push({ type: 'context', elements: [{ type: 'mrkdwn', text: `:factory: *${sc}* Night Shift  •  :robot_face: Generado automáticamente  •  :chart_with_upwards_trend: v5.5` }] });
+  return { blocks };
 }
 
-function sendSlack(url, payload) {
+function sendSlackRaw(url, jsonPayload) {
   GM_xmlhttpRequest({
     method: 'POST', url,
     headers: { 'Content-Type': 'application/json' },
-    data: JSON.stringify({ slack_message: payload }),
+    data: JSON.stringify(jsonPayload),
     onload: r => alert(r.status < 300 ? 'Enviado.' : 'Error ' + r.status),
     onerror: () => alert('Error de red.')
   });
 }
-function sendR() { const s = getStore(); if (!s.webhookUrl) { alert('Configura WH Report.'); return; } sendSlack(s.webhookUrl, buildReport()); }
-function sendM() { const s = getStore(); if (!s.webhookMeetingUrl) { alert('Configura WH Meeting.'); return; } sendSlack(s.webhookMeetingUrl, buildMeeting()); }
+function sendR() { const s = getStore(); if (!s.webhookUrl) { alert('Configura WH Report.'); return; } sendSlackRaw(s.webhookUrl, { text: buildReport() }); }
+function sendM() { const s = getStore(); if (!s.webhookMeetingUrl) { alert('Configura WH Meeting.'); return; } sendSlackRaw(s.webhookMeetingUrl, buildMeetingBlocks()); }
 
 // ─── CONFIG MODAL ─────────────────────────────────────────
 function showConfig() {
