@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Associate Stow-FSAF
 // @namespace    http://tampermonkey.net/
-// @version      5.7.0
+// @version      5.9.0
 // @description  Stow FSAF analysis via API - v52 clean edition
 // @author       Pablllan (Pablo Chicano Llano)
 // @match        https://logistics.amazon.co.uk/station/dashboard/*
@@ -144,7 +144,9 @@ function analyze(packages, breakLimitMs, breakShowMaxMs) {
   for (const p of packages) {
     if (p.packageEventState === 'STOWED') {
       stowed.push(p);
-      trkStow[p.trackingId] = (trkStow[p.trackingId] || 0) + 1;
+      const e = trkStow[p.trackingId] || (trkStow[p.trackingId] = { count: 0, locations: [] });
+      e.count++;
+      e.locations.push(clean(p.scanLocation || ''));
       if (p.eventTime) timestamps.push(p.eventTime);
     }
     if (isErr(p)) {
@@ -155,8 +157,14 @@ function analyze(packages, breakLimitMs, breakShowMaxMs) {
     }
   }
   let dupStowed = 0;
-  for (const [tid, c] of Object.entries(trkStow)) {
-    if (c > 1) { dupStowed += c - 1; dupDetails.push({ tracking: tid, count: c }); }
+  for (const [tid, e] of Object.entries(trkStow)) {
+    if (e.count <= 1) continue;
+    // Solo trackings ES cuentan como X2 (los CR no)
+    if (!/^ES/i.test(tid)) continue;
+    // Si alguno de los escaneos es SC_REPLAN_HB, no cuenta como X2
+    if (e.locations.some(l => /^SC_REPLAN_HB$/i.test(l))) continue;
+    dupStowed += e.count - 1;
+    dupDetails.push({ tracking: tid, count: e.count });
   }
   let sz = 0, bx = 0, trk = 0;
   for (const e of errors) {
@@ -304,9 +312,11 @@ function buildMeetingBlocks() {
   };
   const avg = calcAvgPPH(R);
 
-  // Top 3 = solo ACTIVOS
+  // Top 3 = respeta la vista actual (solo activos / todos)
+  const top3Base = s.showOnlyActive ? allRows.filter(r => r.active) : allRows;
+  const top3 = [...top3Base].sort((a,b) => (b.errors||0) - (a.errors||0)).slice(0,3);
+  const viewLabel = s.showOnlyActive ? 'activos' : 'todos';
   const activeRows = allRows.filter(r => r.active);
-  const top3 = [...activeRows].sort((a,b) => (b.errors||0) - (a.errors||0)).slice(0,3);
 
   const now = new Date();
   const ds = `${String(now.getDate()).padStart(2,'0')}/${String(now.getMonth()+1).padStart(2,'0')}/${now.getFullYear()}`;
@@ -339,7 +349,7 @@ function buildMeetingBlocks() {
       { type: 'mrkdwn', text: `:busts_in_silhouette: *AAs analizados*\n\`${allRows.length}\`` }
     ]},
     { type: 'divider' },
-    { type: 'section', text: { type: 'mrkdwn', text: '*:fire:  TOP 3 BOTTOM — MAYOR IMPACTO FSAF*' } }
+    { type: 'section', text: { type: 'mrkdwn', text: `*:fire:  TOP 3 BOTTOM — MAYOR IMPACTO FSAF*\n_Vista: ${viewLabel}_` } }
   ];
 
   const top3Lines = top3.map((r, i) => {
