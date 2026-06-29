@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Associate Stow-FSAF
 // @namespace    http://tampermonkey.net/
-// @version      5.9.0
+// @version      5.9.1
 // @description  Stow FSAF analysis via API - v52 clean edition
 // @author       Pablllan (Pablo Chicano Llano)
 // @match        https://logistics.amazon.co.uk/station/dashboard/*
@@ -742,20 +742,20 @@ function showPanel() {
 
   p.innerHTML = `
   <div class="head">
-    <div class="title">📦 Stow Audit Dashboard <span style="font-size:11px;font-weight:600;color:#475569;-webkit-text-fill-color:#475569">v5.2</span></div>
+    <div class="title">📦 Stow Audit Dashboard <span style="font-size:11px;font-weight:600;color:#475569;-webkit-text-fill-color:#475569">v5.9</span></div>
     <div class="actions">
       <input id="z-search" class="search-box" placeholder="🔍 Buscar AA..." value="${esc(s.searchFilter||'')}">
-      <button id="z-ref">Actualizar</button>
-      <button id="z-act" class="btn-green">Solo activos</button>
-      <button id="z-all">Todos</button>
+      <button id="z-ref">Actualizar lista</button>
+      <button id="z-act" class="btn-green">Mostrar activos</button>
+      <button id="z-all">Mostrar todos</button>
       <button id="z-del" class="btn-red">Borrar lista</button>
       <button id="z-cfg" class="btn-cfg">⚙️</button>
-      <button id="z-ra" class="btn-green">▶ Activos</button>
-      <button id="z-rt" class="btn-orange">▶ Todos</button>
+      <button id="z-ra" class="btn-green">▶ Analizar activos</button>
+      <button id="z-rt" class="btn-orange">▶ Analizar todos</button>
       ${failedLogins.length ? `<button id="z-rf" class="btn-purple">🔁 Reintentar (${failedLogins.length})</button>` : ''}
       <button id="z-stop" class="btn-red">Stop</button>
-      <button id="z-sr" class="btn-pink">Slack Report</button>
-      <button id="z-sm" class="btn-pink">Slack Meeting</button>
+      <button id="z-sr" class="btn-pink">Slack Final</button>
+      <button id="z-sm" class="btn-pink">Slack Report 1h</button>
       <button id="z-exp" class="btn-blue">⛶</button>
       <button id="z-cls">✕</button>
     </div>
