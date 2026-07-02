@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Associate Stow-FSAF
 // @namespace    http://tampermonkey.net/
-// @version      5.9.1
+// @version      5.11.0
 // @description  Stow FSAF analysis via API - v52 clean edition
 // @author       Pablllan (Pablo Chicano Llano)
 // @match        https://logistics.amazon.co.uk/station/dashboard/*
@@ -27,6 +27,7 @@ const PANEL_ID      = 'pab-stow-fast-panel';
 const MAX_CONCURRENT = 5;
 const PPH_MIN_THRESHOLD = 200;
 const PPH_MAX_THRESHOLD = 700;
+const PPH_MIN_STOWED = 100; // Con menos stowed no se muestra PPH (poca muestra, no fiable)
 
 // ─── UTILS ────────────────────────────────────────────────
 const clean  = v => String(v || '').replace(/ /g, ' ').trim();
@@ -41,7 +42,8 @@ function getStore() {
     sortBy: null, sortDir: 'desc', startDate: null, endDate: null,
     workerComments: {}, showOnlyActive: false,
     webhookUrl: '', webhookMeetingUrl: '', searchFilter: '',
-    breakExcludeMin: 9, breakShowMax: 30, stationCode: null
+    breakExcludeMin: 9, breakShowMax: 30, stationCode: null,
+    cfgStation: '', cfgCycle: '1'
   });
 }
 function setStore(s) { GM_setValue(STORE_KEY, s); }
@@ -88,6 +90,7 @@ function classifyErr(r) {
   const l = clean(r.scanLocation || '');
   if (!l || l === '-') return 'box';
   if (/^NC\d+$/i.test(l)) return null;
+  if (/^ASML\d+$/i.test(l)) return null;
   if (/^[A-Z]{1,2}\d{1,3}-\d{0,2}[A-Z]$/i.test(l)) return 'sourceZone';
   if (/^ES\d+$/i.test(l)) return 'tracking';
   return 'box';
@@ -220,12 +223,18 @@ async function runQueue(q, sd, ed, cb) {
 
 // ─── STATION / CYCLE ──────────────────────────────────────
 function getStation() {
+  // 1º config manual, 2º URL, 3º selector de la página, 4º último usado
+  const cfg = (getStore().cfgStation || '').trim().toUpperCase();
+  if (cfg) return cfg;
   const m = location.href.match(/stationCode=([A-Z0-9]+)/i);
   if (m) return m[1];
   const sel = document.getElementById('stations');
   return sel?.value || getStore().stationCode || null;
 }
 function getCycle() {
+  // 1º config manual (número → CYCLE_N), 2º texto de la página, 4º default
+  const cfg = (getStore().cfgCycle || '').trim();
+  if (cfg) return /^CYCLE_/i.test(cfg) ? cfg.toUpperCase() : `CYCLE_${cfg.replace(/\D/g,'')||'1'}`;
   const m = (document.body?.innerText || '').match(/CYCLE_\d+/);
   return m ? m[0] : 'CYCLE_1';
 }
@@ -354,11 +363,13 @@ function buildMeetingBlocks() {
 
   const top3Lines = top3.map((r, i) => {
     const rDpmo = Math.round(calcDpmo(r.errors, r.stowed));
+    const showPph = r.pph && (r.stowed||0) >= PPH_MIN_STOWED;
     const vs = pphVsAvg(r.pph, avg);
-    const diffStr = vs.show ? `${vs.pct >= 0 ? '+' : ''}${vs.pct.toFixed(0)}%` : '';
+    const diffStr = showPph && vs.show ? `${vs.pct >= 0 ? '+' : ''}${vs.pct.toFixed(0)}%` : '';
     const pphDiff = diffStr ? ` (${diffStr})` : '';
+    const pphVal = showPph ? Math.round(r.pph) : '-';
     const fbText = r.fb ? `\n        :memo: _"${r.fb}"_` : '';
-    return `${medals[i]} *${r.login}*  —  PPH: \`${Math.round(r.pph||0)}\`${pphDiff} • DPMO: \`${fN(rDpmo)}\` • FSAF: \`${r.errors}\` _(SZ:${r.sourceZoneErrors||0} Caja:${r.boxErrors||0} Trk:${r.trackingErrors||0})_${fbText}`;
+    return `${medals[i]} *${r.login}*  —  PPH: \`${pphVal}\`${pphDiff} • DPMO: \`${fN(rDpmo)}\` • FSAF: \`${r.errors}\` _(SZ:${r.sourceZoneErrors||0} Caja:${r.boxErrors||0} Trk:${r.trackingErrors||0})_${fbText}`;
   }).join('\n\n');
 
   blocks.push({ type: 'section', text: { type: 'mrkdwn', text: top3Lines } });
@@ -393,6 +404,12 @@ function showConfig() {
   modal.className = 'pab-modal';
   modal.innerHTML = `
   <h3 style="margin:0 0 18px;font-size:15px;color:#94a3b8;font-weight:900">⚙️ Configuración</h3>
+  <div style="display:flex;gap:8px">
+    <div style="flex:2"><label class="cfg-label">Estación (ej: DQB2)</label>
+    <input id="cfg-station" class="cfg-input" placeholder="Auto si vacío" value="${esc(s.cfgStation||'')}"></div>
+    <div style="flex:1"><label class="cfg-label">Ciclo</label>
+    <input id="cfg-cycle" class="cfg-input" placeholder="1" value="${esc(s.cfgCycle||'')}"></div>
+  </div>
   <label class="cfg-label">Webhook Report (Slack)</label>
   <input id="cfg-wh-r" class="cfg-input" value="${esc(s.webhookUrl||'')}">
   <label class="cfg-label">Webhook Meeting (Slack)</label>
@@ -410,6 +427,8 @@ function showConfig() {
   container.appendChild(bk); container.appendChild(modal);
   document.getElementById('cfg-save').onclick = () => {
     const st = getStore();
+    st.cfgStation        = document.getElementById('cfg-station').value.trim().toUpperCase();
+    st.cfgCycle          = document.getElementById('cfg-cycle').value.trim();
     st.webhookUrl        = document.getElementById('cfg-wh-r').value.trim();
     st.webhookMeetingUrl = document.getElementById('cfg-wh-m').value.trim();
     st.breakExcludeMin   = Number(document.getElementById('cfg-bex').value) || 9;
@@ -452,7 +471,7 @@ function showInfo(login) {
   </div>
   <div class="info-grid">
     <div class="info-stat"><div class="info-stat-label">STOWED</div><div class="info-stat-val">${r?.stowed||0}</div></div>
-    <div class="info-stat"><div class="info-stat-label">PPH</div><div class="info-stat-val" style="color:#22c55e">${r?.pph?r.pph.toFixed(0):'-'} ${vsStr}</div></div>
+    <div class="info-stat"><div class="info-stat-label">PPH</div><div class="info-stat-val" style="color:#22c55e">${(r?.pph&&(r.stowed||0)>=PPH_MIN_STOWED)?r.pph.toFixed(0):'-'} ${(r?.pph&&(r.stowed||0)>=PPH_MIN_STOWED)?vsStr:''}</div></div>
     <div class="info-stat"><div class="info-stat-label">FSAF</div><div class="info-stat-val" style="color:${r?.errors>0?'#ef4444':'#22c55e'}">${r?.errors||0}</div></div>
     <div class="info-stat"><div class="info-stat-label">DPMO</div><div class="info-stat-val" style="color:${dpmoColor}">${Math.round(dpmo)}</div></div>
     <div class="info-stat"><div class="info-stat-label">STOWED X2</div><div class="info-stat-val" style="color:${r?.duplicateStowed>0?'#facc15':'#22c55e'}">${r?.duplicateStowed||0}</div></div>
@@ -712,9 +731,9 @@ function showPanel() {
     const dpmoColor = dpmo > 5000 ? '#ef4444' : dpmo > 2000 ? '#facc15' : '#22c55e';
     const dpmoLabel = dpmo > 5000 ? 'red' : dpmo > 2000 ? 'warn' : 'ok';
     const rowClass  = r && r.errors > 4 ? 'row-risk-high' : r && r.errors > 1 ? 'row-risk-med' : '';
-    const pphStr = r?.pph
+    const pphStr = (r?.pph && (r.stowed||0) >= PPH_MIN_STOWED)
       ? `${r.pph.toFixed(0)} <span style="font-size:10px;font-weight:700;color:${vs.show?(vs.pct>=0?'#22c55e':'#ef4444'):'#475569'}">${vs.show?(vs.pct>=0?'+':'')+vs.pct.toFixed(0)+'%':''}</span>`
-      : '-';
+      : '<span class="c-muted">-</span>';
     return `<tr class="${rowClass}">
       <td><input type="checkbox" class="pab-ck" data-l="${esc(a.associate)}" ${ck} style="accent-color:#ff9900;transform:scale(1.15)"></td>
       <td class="${a.active?'c-ok':'c-bad'}">${a.active?'✅':'❌'}</td>
